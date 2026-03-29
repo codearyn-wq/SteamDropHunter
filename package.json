@@ -1,0 +1,58 @@
+{
+  "name": "steam-drop-hunter",
+  "version": "1.0.0",
+  "description": "24/7 bot that monitors Steam for temporarily free paid games",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "docker:build": "docker build -t steam-drop-hunter .",
+    "docker:run": "docker-compose up -d",
+    "render:start": "node dist/index.js & node dist/keep-alive.js",
+    "postinstall": "node -e \"console.log('Note: better-sqlite3 requires Node.js with C++20 support. On Windows, use WSL or Docker.')\""
+  },
+  "keywords": [
+    "steam",
+    "free-games",
+    "bot",
+    "telegram",
+    "monitor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "bullmq": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "ioredis": "^5.3.2",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.64.0",
+    "sql.js": "^1.10.3",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.19",
+    "@types/node-cron": "^3.0.11",
+    "@types/node-telegram-bot-api": "^0.64.1",
+    "@types/sql.js": "^1.4.9",
+    "@typescript-eslint/eslint-plugin": "^7.0.1",
+    "@typescript-eslint/parser": "^7.0.1",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

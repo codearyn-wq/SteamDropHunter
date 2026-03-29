@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  steam-drop-hunter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: steam-drop-hunter
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ADMIN_ID=${TELEGRAM_ADMIN_ID}
+      - POLL_INTERVAL_MS=${POLL_INTERVAL_MS:-300000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SERVER_PORT=3000
+      - SERVER_HOST=0.0.0.0
+      - DATABASE_PATH=/app/data/steam_drop_hunter.db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_KEY=${API_KEY}
+    volumes:
+      - steam-data:/app/data
+      - steam-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - steam-drop-hunter-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: steam-drop-hunter-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - steam-drop-hunter-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+volumes:
+  steam-data:
+    name: steam-drop-hunter-data
+  steam-logs:
+    name: steam-drop-hunter-logs
+  redis-data:
+    name: steam-drop-hunter-redis-data
+
+networks:
+  steam-drop-hunter-network:
+    name: steam-drop-hunter-network
+    driver: bridge
