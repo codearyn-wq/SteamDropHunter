@@ -32,7 +32,6 @@ export class HealthCheckService {
     this.app.get('/health/detailed', (_req: Request, res: Response) => {
       try {
         const stats = this.db.getStats();
-        const queueStats = this.scheduler.getQueueStats();
         const isSchedulerRunning = this.scheduler.isSchedulerRunning();
 
         const health = {
@@ -42,7 +41,6 @@ export class HealthCheckService {
           scheduler: {
             running: isSchedulerRunning
           },
-          queue: Promise.resolve(queueStats),
           database: {
             connected: true,
             stats

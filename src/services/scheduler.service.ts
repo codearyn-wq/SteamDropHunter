@@ -1,5 +1,4 @@
-import { Queue, Worker, Job } from 'bullmq';
-import IORedis from 'ioredis';
+import cron from 'node-cron';
 import { SteamService } from './steam.service';
 import { FilterEngine } from '../filters/filter.engine';
 import { DatabaseService } from '../database';
@@ -8,13 +7,12 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 
 export class SchedulerService {
-  private queue: Queue;
-  private worker: Worker;
   private steamService: SteamService;
   private filterEngine: FilterEngine;
   private db: DatabaseService;
   private notificationService: NotificationService;
   private isRunning: boolean = false;
+  private cronJob: cron.ScheduledTask | null = null;
 
   constructor(
     db: DatabaseService,
@@ -27,70 +25,7 @@ export class SchedulerService {
     this.filterEngine = filterEngine;
     this.notificationService = notificationService;
 
-    // Initialize Redis connection
-    const connection = new IORedis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-      maxRetriesPerRequest: null,
-      retryStrategy: (times) => {
-        if (times > 3) {
-          logger.warn('Redis connection retries exceeded, using in-memory fallback');
-          return null;
-        }
-        return Math.min(times * 200, 2000);
-      }
-    });
-
-    connection.on('error', (error) => {
-      logger.error('Redis connection error', {
-        error: error.message
-      });
-    });
-
-    connection.on('connect', () => {
-      logger.info('Redis connection established');
-    });
-
-    // Initialize BullMQ queue
-    this.queue = new Queue('steam-drop-hunter', {
-      connection,
-      defaultJobOptions: {
-        removeOnComplete: 100,
-        removeOnFail: 1000,
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000
-        }
-      }
-    });
-
-    // Initialize worker
-    this.worker = new Worker(
-      'steam-drop-hunter',
-      async (job: Job) => this.processJob(job),
-      {
-        connection,
-        concurrency: 1 // Only one job at a time to prevent race conditions
-      }
-    );
-
-    this.worker.on('completed', (job) => {
-      logger.info(`Job ${job.id} completed`, {
-        jobId: job.id,
-        duration: (job.finishedOn || 0) - (job.processedOn || 0)
-      });
-    });
-
-    this.worker.on('failed', (job, error) => {
-      logger.error(`Job ${job?.id} failed`, {
-        jobId: job?.id,
-        error: error.message
-      });
-    });
-
-    logger.info('Scheduler service initialized');
+    logger.info('Scheduler service initialized (cron-based)');
   }
 
   /**
@@ -105,17 +40,21 @@ export class SchedulerService {
     this.isRunning = true;
     logger.info('Starting scheduler service');
 
-    // Add initial job
-    await this.queue.add('check-steam', {}, {
-      repeat: {
-        every: config.polling.intervalMs
-      }
+    // Schedule job every 5 minutes
+    const intervalMinutes = config.polling.intervalMs / 60000;
+    const cronExpression = `*/${intervalMinutes} * * * *`;
+
+    this.cronJob = cron.schedule(cronExpression, () => {
+      this.processJob();
+    }, {
+      scheduled: true,
+      timezone: 'UTC'
     });
 
-    // Also add immediate job to start right away
-    await this.queue.add('check-steam', {});
+    // Run initial check immediately
+    await this.processJob();
 
-    logger.info(`Scheduler started with ${config.polling.intervalMs / 1000}s interval`);
+    logger.info(`Scheduler started with ${intervalMinutes} minute interval`);
   }
 
   /**
@@ -129,8 +68,10 @@ export class SchedulerService {
     this.isRunning = false;
     logger.info('Stopping scheduler service');
 
-    await this.queue.close();
-    await this.worker.close();
+    if (this.cronJob) {
+      this.cronJob.stop();
+      this.cronJob = null;
+    }
 
     logger.info('Scheduler service stopped');
   }
@@ -138,8 +79,8 @@ export class SchedulerService {
   /**
    * Process a scheduled job
    */
-  private async processJob(job: Job): Promise<void> {
-    logger.info('Starting Steam free games check', { jobId: job.id });
+  private async processJob(): Promise<void> {
+    logger.info('Starting Steam free games check');
 
     try {
       // Fetch games from Steam
@@ -191,29 +132,8 @@ export class SchedulerService {
    * Manually trigger a check
    */
   public async triggerCheck(): Promise<void> {
-    await this.queue.add('check-steam', {}, { priority: 1 });
+    await this.processJob();
     logger.info('Manual check triggered');
-  }
-
-  /**
-   * Get queue stats
-   */
-  public async getQueueStats(): Promise<{
-    waiting: number;
-    active: number;
-    completed: number;
-    failed: number;
-    delayed: number;
-  }> {
-    const [waiting, active, completed, failed, delayed] = await Promise.all([
-      this.queue.getWaitingCount(),
-      this.queue.getActiveCount(),
-      this.queue.getCompletedCount(),
-      this.queue.getFailedCount(),
-      this.queue.getDelayedCount()
-    ]);
-
-    return { waiting, active, completed, failed, delayed };
   }
 
   /**
