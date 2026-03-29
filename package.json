@@ -13,7 +13,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "docker:build": "docker build -t steam-drop-hunter .",
     "docker:run": "docker-compose up -d",
-    "render:start": "node dist/index.js & node dist/keep-alive.js",
+    "render:start": "node dist/index.js",
     "postinstall": "node -e \"console.log('Steam Drop Hunter installed successfully!')\""
   },
   "keywords": [
