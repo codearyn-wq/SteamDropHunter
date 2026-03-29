@@ -3,6 +3,7 @@
  * Prevents Render free tier from sleeping by pinging the server periodically
  */
 
+import axios from 'axios';
 import { logger } from './utils/logger';
 
 const PING_INTERVAL_MS = parseInt(process.env.KEEP_ALIVE_INTERVAL_MS || '240000', 10); // 4 minutes (Render sleeps after 15 min)
@@ -10,14 +11,14 @@ const SERVER_URL = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
 
 async function pingServer(): Promise<void> {
   try {
-    const response = await fetch(`${SERVER_URL}/health`, {
-      method: 'GET',
+    const response = await axios.get(`${SERVER_URL}/health`, {
       headers: {
         'User-Agent': 'SteamDropHunter-KeepAlive/1.0'
-      }
+      },
+      timeout: 5000
     });
 
-    if (response.ok) {
+    if (response.status === 200) {
       logger.info('Keep-alive ping successful', {
         status: response.status,
         url: SERVER_URL
